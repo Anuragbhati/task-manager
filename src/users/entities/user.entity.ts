@@ -24,6 +24,6 @@ export class User {
     @ManyToOne(() => Team, team => team.members)
     team: Team | null;
 
-    @OneToMany(() => Task, task => task.assignee)
+    @OneToMany(() => Task, task => task.assignees)
     assignedTasks: Task[];
 }

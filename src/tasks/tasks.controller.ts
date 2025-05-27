@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@n
 import { TasksService } from './tasks.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TaskStatus } from './entities/task.entity';
+import { instanceToPlain } from 'class-transformer';
 
 @Controller('tasks')
 @UseGuards(JwtAuthGuard)
@@ -13,7 +14,7 @@ export class TasksController {
         title: string;
         description: string;
         dueDate: Date;
-        assigneeId?: number;
+        assigneeIds?: number[];
     }) {
         return this.tasksService.createTask(createTaskDto);
     }
@@ -23,14 +24,15 @@ export class TasksController {
         title: string;
         description: string;
         dueDate: Date;
-        assigneeId?: number;
+        assigneeIds?: number[];
     }[]) {
         return Promise.all(createTasksDto.map(taskDto => this.tasksService.createTask(taskDto)));
     }
 
     @Get()
-    findAll() {
-        return this.tasksService.getAllTasks();
+    async findAll() {
+        const tasks = await this.tasksService.getAllTasks();
+        return instanceToPlain(tasks);
     }
 
     @Get(':id')
@@ -46,7 +48,7 @@ export class TasksController {
             description?: string;
             dueDate?: Date;
             status?: TaskStatus;
-            assigneeId?: number;
+            assigneeIds?: number[];
         },
     ) {
         return this.tasksService.updateTask(+id, updateTaskDto);

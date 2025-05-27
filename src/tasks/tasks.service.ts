@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Task, TaskStatus } from './entities/task.entity';
 import { User } from '../users/entities/user.entity';
 import { instanceToPlain } from 'class-transformer';
@@ -18,24 +18,40 @@ export class TasksService {
         title: string;
         description: string;
         dueDate: Date | string;
-        assigneeId?: number;
+        assigneeIds?: number[];
     }) {
         if (typeof createTaskDto.dueDate === 'string') {
             createTaskDto.dueDate = new Date(createTaskDto.dueDate);
         }
+
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const dueDate = new Date(createTaskDto.dueDate);
+        dueDate.setHours(0, 0, 0, 0);
+
+        if (dueDate < now) {
+            throw new BadRequestException('Due date must be current or future date');
+        }
+
         const task = this.taskRepository.create({
-            ...createTaskDto,
+            title: createTaskDto.title,
+            description: createTaskDto.description,
+            dueDate: createTaskDto.dueDate,
             status: TaskStatus.TODO,
         });
 
-        if (createTaskDto.assigneeId) {
-            const assignee = await this.userRepository.findOne({
-                where: { id: createTaskDto.assigneeId },
+        if (createTaskDto.assigneeIds?.length) {
+            const assignees = await this.userRepository.findBy({
+                id: In(createTaskDto.assigneeIds)
             });
-            if (!assignee) {
-                throw new NotFoundException(`User with ID ${createTaskDto.assigneeId} not found`);
+
+            if (assignees.length !== createTaskDto.assigneeIds.length) {
+                const foundIds = assignees.map(user => user.id);
+                const missingIds = createTaskDto.assigneeIds.filter(id => !foundIds.includes(id));
+                throw new NotFoundException(`Users with IDs ${missingIds.join(', ')} not found`);
             }
-            task.assignee = assignee;
+
+            task.assignees = assignees;
         }
 
         return this.taskRepository.save(task);
@@ -43,14 +59,14 @@ export class TasksService {
 
     async getAllTasks() {
         return this.taskRepository.find({
-            relations: ['assignee'],
+            relations: ['assignees'],
         });
     }
 
     async getTaskById(id: number) {
         const task = await this.taskRepository.findOne({
             where: { id },
-            relations: ['assignee'],
+            relations: ['assignees'],
         });
 
         if (!task) {
@@ -67,20 +83,35 @@ export class TasksService {
             description?: string;
             dueDate?: Date;
             status?: TaskStatus;
-            assigneeId?: number;
+            assigneeIds?: number[];
         },
     ) {
         const task = await this.getTaskById(id);
 
-        if (updateTaskDto.assigneeId) {
-            const assignee = await this.userRepository.findOne({
-                where: { id: updateTaskDto.assigneeId },
-            });
-            if (!assignee) {
-                throw new NotFoundException(`User with ID ${updateTaskDto.assigneeId} not found`);
+        if (updateTaskDto.dueDate) {
+            const now = new Date();
+            now.setHours(0, 0, 0, 0);
+            const dueDate = new Date(updateTaskDto.dueDate);
+            dueDate.setHours(0, 0, 0, 0);
+
+            if (dueDate < now) {
+                throw new BadRequestException('Due date must be current or future date');
             }
-            task.assignee = assignee;
-            delete updateTaskDto.assigneeId;
+        }
+
+        if (updateTaskDto.assigneeIds?.length) {
+            const assignees = await this.userRepository.findBy({
+                id: In(updateTaskDto.assigneeIds)
+            });
+            
+            if (assignees.length !== updateTaskDto.assigneeIds.length) {
+                const foundIds = assignees.map(user => user.id);
+                const missingIds = updateTaskDto.assigneeIds.filter(id => !foundIds.includes(id));
+                throw new NotFoundException(`Users with IDs ${missingIds.join(', ')} not found`);
+            }
+            
+            task.assignees = assignees;
+            delete updateTaskDto.assigneeIds;
         }
 
         Object.assign(task, updateTaskDto);
@@ -95,10 +126,10 @@ export class TasksService {
     }
 
     async getTasksByAssignee(userId: number) {
-        const task = await this.taskRepository.find({
-            where: { assignee: { id: userId } },
-            relations: ['assignee'],
+        const tasks = await this.taskRepository.find({
+            where: { assignees: { id: userId } },
+            relations: ['assignees'],
         });
-        return instanceToPlain(task);
+        return instanceToPlain(tasks);
     }
 }
