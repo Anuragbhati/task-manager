@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToMany, ManyToOne } from 'typeorm';
 import { Exclude } from 'class-transformer';
 import { Task } from '../../tasks/entities/task.entity';
 import { Team } from '../../teams/entities/team.entity';
@@ -24,6 +24,6 @@ export class User {
     @ManyToOne(() => Team, team => team.members)
     team: Team | null;
 
-    @OneToMany(() => Task, task => task.assignees)
+    @ManyToMany(() => Task, task => task.assignees)
     assignedTasks: Task[];
 }

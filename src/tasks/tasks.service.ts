@@ -54,13 +54,19 @@ export class TasksService {
             task.assignees = assignees;
         }
 
-        return this.taskRepository.save(task);
+        const savedTask = await this.taskRepository.save(task);
+        const result = await this.taskRepository.findOne({
+            where: { id: savedTask.id },
+            relations: ['assignees']
+        });
+        return instanceToPlain(result);
     }
 
     async getAllTasks() {
-        return this.taskRepository.find({
+        const tasks = await this.taskRepository.find({
             relations: ['assignees'],
         });
+        return instanceToPlain(tasks);
     }
 
     async getTaskById(id: number) {
@@ -73,7 +79,7 @@ export class TasksService {
             throw new NotFoundException(`Task with ID ${id} not found`);
         }
 
-        return task;
+        return instanceToPlain(task);
     }
 
     async updateTask(
@@ -103,19 +109,24 @@ export class TasksService {
             const assignees = await this.userRepository.findBy({
                 id: In(updateTaskDto.assigneeIds)
             });
-            
+
             if (assignees.length !== updateTaskDto.assigneeIds.length) {
                 const foundIds = assignees.map(user => user.id);
                 const missingIds = updateTaskDto.assigneeIds.filter(id => !foundIds.includes(id));
                 throw new NotFoundException(`Users with IDs ${missingIds.join(', ')} not found`);
             }
-            
+
             task.assignees = assignees;
             delete updateTaskDto.assigneeIds;
         }
 
         Object.assign(task, updateTaskDto);
-        return this.taskRepository.save(instanceToPlain(task));
+        const updatedTask = await this.taskRepository.save(task);
+        const result = await this.taskRepository.findOne({
+            where: { id: updatedTask.id },
+            relations: ['assignees']
+        });
+        return instanceToPlain(result);
     }
 
     async deleteTask(id: number) {
